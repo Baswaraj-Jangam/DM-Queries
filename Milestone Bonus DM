@@ -1,0 +1,94 @@
+/*===========================AJG IN MILESTOEN BONUS======================================*/
+/*========================DATA SET 1 BEGINS=========================*/
+SELECT 
+    papf.person_number,
+   /* TO_CHAR(ppos.date_start, 'YYYY-MM-DD', 'NLS_DATE_LANGUAGE = English') AS Latest_Hire_Date,*/
+   /*Considering Adjusted service date(getting from the DFF Work Relationship Attributes and code is PER_PPS_DF, which is present in ppos table as attribute_date4column, if adjusted service date is null then we are checking for Latest Legal Entity  Transfer Date which is adjusted_svc_date column from ppos table*/
+   TO_CHAR(COALESCE(ppos.attribute_date4, ppos.adjusted_svc_date,ppos.date_start),
+               'YYYY-MM-DD',
+               'NLS_DATE_LANGUAGE = English') AS Latest_Hire_Date,
+    ppnf.display_name,
+    FLOOR(MONTHS_BETWEEN(TRUNC(:start_date), ppos.date_start) / 12) || ' Years ' ||
+    FLOOR(MOD(MONTHS_BETWEEN(TRUNC(:start_date), ppos.date_start), 12)) || ' Months' AS Completed_Years_of_service,
+    ms.milestone_year || ' YEARS' AS next_milestone_year,
+    TO_CHAR(ADD_MONTHS(ppos.date_start, ms.milestone_year * 12), 'YYYY-MM-DD', 'NLS_DATE_LANGUAGE = English') AS anniversary_date,
+    CASE TO_NUMBER(TO_CHAR(ppos.date_start, 'MM'))
+        WHEN 1 THEN 'JAN' WHEN 2 THEN 'FEB' WHEN 3 THEN 'MAR'
+        WHEN 4 THEN 'APR' WHEN 5 THEN 'MAY' WHEN 6 THEN 'JUN'
+        WHEN 7 THEN 'JUL' WHEN 8 THEN 'AUG' WHEN 9 THEN 'SEP'
+        WHEN 10 THEN 'OCT' WHEN 11 THEN 'NOV' WHEN 12 THEN 'DEC'
+        ELSE 'N/A'
+    END AS joining_month,
+    hl.location_code,
+    UPPER(hl.TOWN_OR_CITY) AS City,
+    (ms.milestone_year * 12) - FLOOR(MONTHS_BETWEEN(TRUNC(:start_date), ppos.date_start)) AS Months_Remaining_For_Milestone_Year
+FROM 
+    per_all_people_f papf,
+    per_person_names_f ppnf,
+    per_all_assignments_m paam,
+    per_periods_of_service ppos,
+    hr_locations hl,
+    (SELECT LEVEL * 5 AS milestone_year
+     FROM dual
+     CONNECT BY LEVEL <= 8) ms
+WHERE 
+    papf.person_id = ppnf.person_id
+    AND paam.person_id = ppnf.person_id
+    AND paam.person_id = ppos.person_id
+    AND paam.period_of_service_id = ppos.period_of_service_id
+    AND hl.location_id = paam.location_id
+    AND ADD_MONTHS(ppos.date_start, ms.milestone_year * 12) BETWEEN ppos.date_start AND SYSDATE
+    AND ADD_MONTHS(ppos.date_start, ms.milestone_year * 12) >= :start_date
+    AND ADD_MONTHS(ppos.date_start, ms.milestone_year * 12) <= :end_date
+    AND TRUNC(SYSDATE) BETWEEN papf.effective_start_date AND papf.effective_end_date
+    AND ppnf.name_type = 'GLOBAL'
+    AND TRUNC(SYSDATE) BETWEEN ppnf.effective_start_date AND ppnf.effective_end_date
+    AND TRUNC(SYSDATE) BETWEEN paam.effective_start_date AND paam.effective_end_date
+    AND paam.effective_latest_change = 'Y'
+    AND paam.primary_flag = 'Y'
+    AND paam.assignment_type = 'E'
+    AND paam.assignment_status_type = 'ACTIVE'
+    AND paam.legislation_code = 'IN'
+    AND hl.country = 'IN'
+    AND hl.active_status = 'A'
+    AND :start_date BETWEEN hl.EFFECTIVE_START_DATE AND hl.EFFECTIVE_END_DATE
+	
+	
+/*========================DATA SET 1 ENDS=========================*/
+
+/*========================DATA SET 2 BEGINS=========================*/
+SELECT /*+ MATERIALIZE */
+    t.user_table_id,
+    t.base_user_table_name AS table_name,
+    r.row_low_range_or_name AS tenure_YEARS,
+    c_tl.user_column_name,
+    c_tl.last_update_date,
+    v.value
+FROM ff_user_tables t
+JOIN ff_user_rows_f r
+  ON t.user_table_id = r.user_table_id
+JOIN ff_user_columns c
+  ON t.user_table_id = c.user_table_id
+JOIN ff_user_columns_tl c_tl
+  ON c.user_column_id = c_tl.user_column_id
+JOIN ff_user_column_instances_f v
+  ON c.user_column_id = v.user_column_id
+ AND r.user_row_id = v.user_row_id
+WHERE t.base_user_table_name = 'AJG_IN_MILESTONE_BONUS_RATES_UDT'
+  AND UPPER(r.row_low_range_or_name) IN ('5 YEARS','10 YEARS','15 YEARS',
+                                         '20 YEARS','25 YEARS','30 YEARS','35 YEARS')
+  AND c_tl.language = 'US'
+  AND :start_date BETWEEN v.effective_start_date AND v.effective_end_date
+ORDER BY tenure_YEARS
+/*========================DATA SET 2 ENDS=========================*/
+
+
+
+/*=======================BURSTING QUERY    to get custom file name when we run flow=====================*/
+SELECT 'DUMMY' AS KEY,
+	'MileStoneBonus' AS TEMPLATE,
+	'xlsx' AS OUTPUT_FORMAT,
+	'Milestone_Bonus_'|| to_char(sysdate, 'YYYYMMDD') AS output_name
+FROM dual
+
+/*SPLIT By and Deliver By*/  /DATA_DS/G1/KEY
