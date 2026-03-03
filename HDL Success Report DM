@@ -1,0 +1,30 @@
+SELECT ds.ucm_content_id
+
+   ,(SELECT distinct papf.person_number
+	      from per_all_people_f papf
+		 WHERE person_id = (select paam.person_id from per_all_assignments_m paam
+		                   where assignment_number = fr.pval016
+						     and rownum =1
+							 and trunc(sysdate) between paam.effective_Start_Date and paam.effective_end_Date
+						  )
+		   and trunc(sysdate) between papf.effective_Start_Date and papf.effective_end_Date
+		   and rownum =1
+	   ) person_number
+	  ,fr.pval003 as Schedule_Name
+	  ,fr.PVAL016 as Assignment_Number
+	  ,ds.IMPORTED_STATUS as Import_Satus
+	  ,ds.loaded_status as Load_Status
+	   
+	   
+FROM   fusion.hrc_dl_data_sets      ds
+       ,fusion.hrc_dl_file_lines     fl
+	   ,fusion.hrc_dl_file_rows     fr
+
+WHERE 1=1
+	and fl.request_id = ds.request_id
+    and fr.line_id(+)= fl.line_id
+    and ds.ucm_content_id =:UCM_CONTENT_ID
+  AND  UPPER(ds.loaded_status) = 'SUCCESS'
+  AND  fr.import_status = 'SUCCESS'
+  AND  fr.line_operation <> 'METADATA'
+  ORDER BY fr.line_id DESC
