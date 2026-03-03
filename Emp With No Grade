@@ -1,0 +1,41 @@
+SELECT DISTINCT
+     
+       papf.person_number                     AS "Employee Number",
+       hl.location_name                       AS "Location",
+       CASE 
+           WHEN paam.grade_id IS NULL THEN 'Grade is Null'
+           ELSE 'Grade is Not Null'
+       END                                    AS "Grade Comments",
+       CASE 
+           WHEN paam.ass_attribute4 IS NULL THEN 'Bill Back BU is Null'
+           ELSE 'Bill Back BU is Not Null'
+       END                                    AS "Bill Back BU Comments",
+       CASE 
+           WHEN paam.grade_id IS NULL THEN 'No Grade'
+           ELSE pg.name 
+       END AS "Grade_Name",
+       CASE 
+            WHEN paam.ass_attribute4 IS NULL THEN 'No Bill Back BU'
+            ELSE paam.ass_attribute4
+       END AS "Bill_Back_BU" 
+FROM   per_all_people_f          papf,
+       per_all_assignments_m     paam,
+       per_grades                pg,
+       hr_locations              hl,
+       per_legal_employers       ple
+WHERE  paam.person_id = papf.person_id
+  AND  hl.location_id = paam.location_id
+  AND  ple.name = 'Gallagher Service Center LLP'
+  AND  :pEffectiveDate BETWEEN paam.effective_start_date AND paam.effective_end_date
+  AND  :pEffectiveDate BETWEEN papf.effective_start_date AND papf.effective_end_date
+  AND  :pEffectiveDate BETWEEN hl.effective_start_date   AND hl.effective_end_date
+  AND  paam.effective_latest_change = 'Y'
+  AND  paam.assignment_type         = 'E'
+  AND  paam.legislation_code        = 'IN'
+  AND  paam.primary_flag            = 'Y'
+  AND  paam.assignment_status_type  = 'ACTIVE'
+ AND paam.grade_id=pg.grade_id(+)
+  AND  hl.country                   = 'IN'
+ AND  ple.status                   = 'A'
+--AND papf.person_number='5259572'
+  AND (paam.grade_id IS NULL OR paam.ass_attribute4 IS NULL)
